@@ -1,6 +1,9 @@
 const User = require("../models/user.model");
 const jwt = require("jsonwebtoken");
+const axios = require("axios");
 const { generateOTP, sendOtpEmail } = require("../utils/email.util");
+
+const RECAPTCHA_SECRET_KEY = "6LeMxG4sAAAAAIhWXezN_Q0xC5Yxmmwiw-jGQTKw";
 
 /**
  * Generate JWT token
@@ -33,15 +36,12 @@ const sendTokenResponse = (user, statusCode, res, message) => {
     isVerified: user.isVerified,
   };
 
-  res
-    .status(statusCode)
-    .cookie("token", token, cookieOptions)
-    .json({
-      success: true,
-      message,
-      token,
-      user: userData,
-    });
+  res.status(statusCode).cookie("token", token, cookieOptions).json({
+    success: true,
+    message,
+    token,
+    user: userData,
+  });
 };
 
 /**
@@ -51,7 +51,41 @@ const sendTokenResponse = (user, statusCode, res, message) => {
  */
 const register = async (req, res) => {
   try {
-    const { fullName, email, phoneNumber, password } = req.body;
+    const { fullName, email, phoneNumber, password, recaptchaToken } = req.body;
+
+    // Verify reCAPTCHA
+    if (!recaptchaToken) {
+      return res.status(400).json({
+        success: false,
+        message: "reCAPTCHA verification is required.",
+      });
+    }
+
+    try {
+      const recaptchaResponse = await axios.post(
+        "https://www.google.com/recaptcha/api/siteverify",
+        null,
+        {
+          params: {
+            secret: RECAPTCHA_SECRET_KEY,
+            response: recaptchaToken,
+          },
+        },
+      );
+
+      if (!recaptchaResponse.data.success) {
+        return res.status(400).json({
+          success: false,
+          message: "reCAPTCHA verification failed. Please try again.",
+        });
+      }
+    } catch (recaptchaError) {
+      console.error("reCAPTCHA verification error:", recaptchaError);
+      return res.status(500).json({
+        success: false,
+        message: "reCAPTCHA verification failed. Please try again.",
+      });
+    }
 
     // Check if user already exists
     const existingUser = await User.findOne({ email });
@@ -67,7 +101,8 @@ const register = async (req, res) => {
 
         return res.status(200).json({
           success: true,
-          message: "Account exists but not verified. A new OTP has been sent to your email.",
+          message:
+            "Account exists but not verified. A new OTP has been sent to your email.",
         });
       }
       return res.status(400).json({
@@ -94,7 +129,8 @@ const register = async (req, res) => {
 
     res.status(201).json({
       success: true,
-      message: "Registration successful! Please verify your email with the OTP sent.",
+      message:
+        "Registration successful! Please verify your email with the OTP sent.",
     });
   } catch (error) {
     console.error("Register Error:", error);
@@ -249,7 +285,8 @@ const login = async (req, res) => {
 
       return res.status(403).json({
         success: false,
-        message: "Email not verified. A new verification OTP has been sent to your email.",
+        message:
+          "Email not verified. A new verification OTP has been sent to your email.",
         requiresVerification: true,
       });
     }
@@ -266,7 +303,8 @@ const login = async (req, res) => {
       return res.status(200).json({
         success: true,
         requires2FA: true,
-        message: "Two-factor authentication required. An OTP has been sent to your email.",
+        message:
+          "Two-factor authentication required. An OTP has been sent to your email.",
       });
     }
 
@@ -355,7 +393,8 @@ const resetPassword = async (req, res) => {
 
     res.status(200).json({
       success: true,
-      message: "Password reset successful! You can now login with your new password.",
+      message:
+        "Password reset successful! You can now login with your new password.",
     });
   } catch (error) {
     console.error("Reset Password Error:", error);

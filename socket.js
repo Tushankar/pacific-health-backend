@@ -15,14 +15,14 @@ const initSocket = (server) => {
   io.use(async (socket, next) => {
     try {
       const token = socket.handshake.auth.token || socket.handshake.query.token;
-      
+
       if (!token) {
         return next(new Error("Authentication error: No token provided"));
       }
 
       const decoded = jwt.verify(token, process.env.JWT_SECRET);
       const user = await User.findById(decoded.id).select("-password");
-      
+
       if (!user) {
         return next(new Error("Authentication error: User not found"));
       }
@@ -48,7 +48,7 @@ const initSocket = (server) => {
     socket.on("send_message", async ({ recipientId, message }) => {
       try {
         const room = [socket.user._id.toString(), recipientId.toString()].sort().join("-");
-        
+
         // Save message to database
         const newMessage = await Message.create({
           sender: socket.user._id,
@@ -72,6 +72,80 @@ const initSocket = (server) => {
 
       } catch (err) {
         console.error("Socket Send Message Error:", err);
+      }
+    });
+
+    // Edit message
+    socket.on("edit_message", async ({ messageId, newMessage }) => {
+      try {
+        const messageDoc = await Message.findOne({ _id: messageId, sender: socket.user._id });
+        if (!messageDoc) return;
+
+        messageDoc.message = newMessage;
+        messageDoc.isEdited = true;
+        await messageDoc.save();
+
+        io.to(messageDoc.room).emit("message_edited", {
+          _id: messageDoc._id,
+          message: newMessage,
+          isEdited: true
+        });
+      } catch (err) {
+        console.error("Socket Edit Message Error:", err);
+      }
+    });
+
+    // Delete message for me
+    socket.on("delete_message_me", async ({ messageId }) => {
+      try {
+        const messageDoc = await Message.findById(messageId);
+        if (!messageDoc) return;
+
+        // Ensure user is part of the room
+        if (messageDoc.sender.toString() !== socket.user._id.toString() &&
+          messageDoc.recipient.toString() !== socket.user._id.toString()) {
+          return;
+        }
+
+        if (!messageDoc.deletedForMe.includes(socket.user._id)) {
+          messageDoc.deletedForMe.push(socket.user._id);
+          await messageDoc.save();
+        }
+
+        // Emit back to the user who deleted it
+        socket.emit("message_deleted_me", { messageId });
+      } catch (err) {
+        console.error("Socket Delete For Me Error:", err);
+      }
+    });
+
+    // Delete message for everyone
+    socket.on("delete_message_everyone", async ({ messageId }) => {
+      try {
+        const messageDoc = await Message.findOne({ _id: messageId, sender: socket.user._id });
+        if (!messageDoc) return;
+
+        messageDoc.deletedForEveryone = true;
+        await messageDoc.save();
+
+        io.to(messageDoc.room).emit("message_deleted_everyone", {
+          _id: messageDoc._id
+        });
+      } catch (err) {
+        console.error("Socket Delete For Everyone Error:", err);
+      }
+    });
+
+    // Mark messages as read
+    socket.on("mark_read", async ({ senderId }) => {
+      try {
+        const room = [socket.user._id.toString(), senderId.toString()].sort().join("-");
+
+        io.to(room).emit("messages_read", {
+          readerId: socket.user._id
+        });
+      } catch (err) {
+        console.error("Socket Mark Read Error:", err);
       }
     });
 

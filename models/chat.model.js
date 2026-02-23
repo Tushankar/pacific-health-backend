@@ -21,6 +21,18 @@ const messageSchema = new mongoose.Schema(
       type: Boolean,
       default: false,
     },
+    isEdited: {
+      type: Boolean,
+      default: false,
+    },
+    deletedForMe: [{
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "User",
+    }],
+    deletedForEveryone: {
+      type: Boolean,
+      default: false,
+    },
     room: {
       type: String,
       required: true, // Typically `${userId1}-${userId2}` (sorted alphabetically)

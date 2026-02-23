@@ -1,5 +1,8 @@
 const Message = require("../models/chat.model");
 const User = require("../models/user.model");
+// We need to inject the io instance here, or simpler, we can emit from socket.io when mark as read happens
+// The easiest way without circular dependencies is to handle isRead locally in the frontend when sending markAsRead, but since we are refetching, 
+// let's just make the frontend optimistic or add a socket emit in the frontend markAsRead.
 
 /**
  * @desc    Get all users for chat (admin sees everyone, user sees admins)
@@ -15,7 +18,7 @@ const getChatUsers = async (req, res) => {
   try {
     const userId = req.user._id;
     let users;
-    
+
     if (req.user.role === "admin") {
       users = await User.find({ _id: { $ne: userId } }).select("fullName email role profileImage");
     } else {
@@ -26,26 +29,32 @@ const getChatUsers = async (req, res) => {
     const enhancedUsers = await Promise.all(
       users.map(async (user) => {
         const room = [userId.toString(), user._id.toString()].sort().join("-");
-        
+
         // Count unread messages for this recipient from this sender
         const unreadCount = await Message.countDocuments({
           room,
           recipient: userId,
-          isRead: false
+          isRead: false,
+          deletedForMe: { $ne: userId }
         });
 
         // Get the very last message in this room
         const lastMessage = await Message.findOne({ room })
           .sort({ createdAt: -1 })
-          .select("message createdAt sender");
+          .select("message createdAt sender deletedForEveryone isEdited deletedForMe");
+
+        const isLastMsgDeletedForMe = lastMessage ? lastMessage.deletedForMe.some(id => id.toString() === userId.toString()) : false;
 
         return {
           ...user.toObject(),
           unreadCount,
           lastMessage: lastMessage ? {
-            content: lastMessage.message,
+            content: (lastMessage.deletedForEveryone || isLastMsgDeletedForMe) ? "This message was deleted" : lastMessage.message,
             createdAt: lastMessage.createdAt,
-            sender: lastMessage.sender
+            sender: lastMessage.sender,
+            isEdited: lastMessage.isEdited,
+            deletedForEveryone: lastMessage.deletedForEveryone,
+            isDeletedForMe: isLastMsgDeletedForMe
           } : null
         };
       })

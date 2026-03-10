@@ -87,6 +87,15 @@ const register = async (req, res) => {
       });
     }
 
+    // Password complexity check
+    const passwordRegex = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&#])[A-Za-z\d@$!%*?&#]{8,}$/;
+    if (!passwordRegex.test(password)) {
+      return res.status(400).json({
+        success: false,
+        message: "Password must be at least 8 characters long and include an uppercase letter, a number, and a special character.",
+      });
+    }
+
     // Check if user already exists
     const existingUser = await User.findOne({ email });
     if (existingUser) {
@@ -383,6 +392,15 @@ const resetPassword = async (req, res) => {
       return res.status(400).json({
         success: false,
         message: "OTP has expired. Please request a new one.",
+      });
+    }
+
+    // Password complexity check
+    const passwordRegex = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&#])[A-Za-z\d@$!%*?&#]{8,}$/;
+    if (!passwordRegex.test(newPassword)) {
+      return res.status(400).json({
+        success: false,
+        message: "New password must be at least 8 characters long and include an uppercase letter, a number, and a special character.",
       });
     }
 

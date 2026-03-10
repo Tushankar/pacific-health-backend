@@ -24,6 +24,7 @@ const getProfile = async (req, res) => {
         role: user.role,
         isVerified: user.isVerified,
         twoFactorEnabled: user.twoFactorEnabled || false,
+        profilePicture: user.profilePicture || null,
         createdAt: user.createdAt,
       },
     });
@@ -68,6 +69,7 @@ const updateProfile = async (req, res) => {
         bio: user.bio,
         role: user.role,
         isVerified: user.isVerified,
+        profilePicture: user.profilePicture || null,
       },
     });
   } catch (error) {
@@ -92,10 +94,11 @@ const changePassword = async (req, res) => {
       });
     }
 
-    if (newPassword.length < 6) {
+    const passwordRegex = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&#])[A-Za-z\d@$!%*?&#]{8,}$/;
+    if (!passwordRegex.test(newPassword)) {
       return res.status(400).json({
         success: false,
-        message: "New password must be at least 6 characters.",
+        message: "New password must be at least 8 characters long and include an uppercase letter, a number, and a special character.",
       });
     }
 
@@ -153,4 +156,42 @@ const toggle2FA = async (req, res) => {
   }
 };
 
-module.exports = { getProfile, updateProfile, changePassword, toggle2FA };
+/**
+ * @desc    Upload profile picture
+ * @route   POST /api/user/profile-picture
+ * @access  Private
+ */
+const uploadProfilePicture = async (req, res) => {
+  try {
+    if (!req.file) {
+      return res.status(400).json({ success: false, message: "Please upload a file." });
+    }
+
+    const user = await User.findById(req.user._id);
+    if (!user) {
+      return res.status(404).json({ success: false, message: "User not found." });
+    }
+
+    // Save relative path
+    const filePath = `/uploads/profiles/${req.file.filename}`;
+    user.profilePicture = filePath;
+    await user.save();
+
+    res.status(200).json({
+      success: true,
+      message: "Profile picture uploaded successfully!",
+      profilePicture: filePath,
+      user: {
+        _id: user._id,
+        fullName: user.fullName,
+        email: user.email,
+        profilePicture: user.profilePicture,
+      }
+    });
+  } catch (error) {
+    console.error("Upload Profile Picture Error:", error);
+    res.status(500).json({ success: false, message: "Server error." });
+  }
+};
+
+module.exports = { getProfile, updateProfile, changePassword, toggle2FA, uploadProfilePicture };

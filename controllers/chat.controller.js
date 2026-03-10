@@ -20,9 +20,9 @@ const getChatUsers = async (req, res) => {
     let users;
 
     if (req.user.role === "admin") {
-      users = await User.find({ _id: { $ne: userId } }).select("fullName email role profileImage");
+      users = await User.find({ _id: { $ne: userId } }).select("fullName email role profilePicture");
     } else {
-      users = await User.find({ role: "admin" }).select("fullName email role profileImage");
+      users = await User.find({ role: "admin" }).select("fullName email role profilePicture");
     }
 
     // Enhance users with unread count and last message
@@ -111,8 +111,8 @@ const getMessages = async (req, res) => {
 
     const messages = await Message.find({ room })
       .sort({ createdAt: 1 })
-      .populate("sender", "fullName")
-      .populate("recipient", "fullName");
+      .populate("sender", "fullName profilePicture")
+      .populate("recipient", "fullName profilePicture");
 
     // Also mark as read when fetching history
     await Message.updateMany(

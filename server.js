@@ -40,7 +40,7 @@ app.use(
     methods: ["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
     allowedHeaders: ["Content-Type", "Authorization"],
     optionsSuccessStatus: 200,
-  })
+  }),
 );
 
 // Body parser
